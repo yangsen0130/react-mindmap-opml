@@ -4,6 +4,7 @@ interface Node {
   id: string
   content: string
   children: Node[]
+  collapsed?: boolean
 }
 
 const MindMapNode: React.FC<{
@@ -11,21 +12,35 @@ const MindMapNode: React.FC<{
   onAddChild: (parentId: string) => void
   onDeleteNode: (id: string) => void
   onUpdateContent: (id: string, content: string) => void
+  onToggleCollapse: (id: string) => void
   depth?: number
-}> = ({ node, onAddChild, onDeleteNode, onUpdateContent, depth = 0 }) => {
+}> = ({ node, onAddChild, onDeleteNode, onUpdateContent, onToggleCollapse, depth = 0 }) => {
   return (
     <div className="flex items-center">
-      <div
-        className="border rounded p-2 mb-2 cursor-pointer bg-white min-w-[100px] max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap"
-        onClick={() => onDeleteNode(node.id)}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          onAddChild(node.id)
-        }}
-      >
-        {node.content}
+      <div className="relative">
+        <div
+          className="border rounded p-2 mb-2 cursor-pointer bg-white min-w-[100px] max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap"
+          onClick={() => onDeleteNode(node.id)}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            onAddChild(node.id)
+          }}
+        >
+          {node.content}
+        </div>
+        {node.children.length > 0 && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleCollapse(node.id)
+            }}
+            className="absolute -right-4 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-white border rounded-full flex items-center justify-center"
+          >
+            {node.collapsed ? '+' : '-'}
+          </button>
+        )}
       </div>
-      {node.children.length > 0 && (
+      {!node.collapsed && node.children.length > 0 && (
         <div className={`flex flex-col ${depth % 2 === 0 ? 'items-start' : 'items-end'}`}>
           <div className="w-8 border-t border-gray-300"></div>
           <div className="flex">
@@ -38,6 +53,7 @@ const MindMapNode: React.FC<{
                   onAddChild={onAddChild}
                   onDeleteNode={onDeleteNode}
                   onUpdateContent={onUpdateContent}
+                  onToggleCollapse={onToggleCollapse}
                   depth={depth + 1}
                 />
               ))}
@@ -55,11 +71,22 @@ const TextualMindMap: React.FC<{
   onAddSibling: (path: number[]) => void
   onIndent: (path: number[]) => void
   onOutdent: (path: number[]) => void
+  onToggleCollapse: (id: string) => void
   path?: number[]
   focusNodeId?: string
-}> = ({ nodes, onUpdateContent, onAddSibling, onIndent, onOutdent, path = [], focusNodeId }) => {
+}> = ({
+  nodes,
+  onUpdateContent,
+  onAddSibling,
+  onIndent,
+  onOutdent,
+  onToggleCollapse,
+  path = [],
+  focusNodeId,
+}) => {
   const textareaRefs = useRef<{ [key: string]: HTMLTextAreaElement | null }>({})
   const [isComposing, setIsComposing] = useState<{ [key: string]: boolean }>({})
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
 
   useEffect(() => {
     if (focusNodeId && textareaRefs.current[focusNodeId]) {
@@ -95,33 +122,65 @@ const TextualMindMap: React.FC<{
     }
 
   return (
-    <ul className="list-disc pl-4">
+    <ul className="list-none pl-4">
       {nodes.map((node, index) => {
         const currentPath = [...path, index]
 
         return (
-          <li key={node.id}>
-            <textarea
-              value={node.content}
-              onChange={handleContentChange(node.id)}
-              ref={(el) => (textareaRefs.current[node.id] = el)}
-              onCompositionStart={handleCompositionStart(node.id)}
-              onCompositionEnd={handleCompositionEnd(node.id)}
-              onKeyDown={handleKeyDown(node.id, currentPath)}
-              className="border-b border-gray-300 focus:outline-none focus:border-blue-500 w-full resize-none overflow-hidden"
-              rows={1}
-            />
-            {node.children.length > 0 && (
-              <TextualMindMap
-                nodes={node.children}
-                onUpdateContent={onUpdateContent}
-                onAddSibling={onAddSibling}
-                onIndent={onIndent}
-                onOutdent={onOutdent}
-                path={currentPath}
-                focusNodeId={focusNodeId}
-              />
-            )}
+          <li
+            key={node.id}
+            onMouseEnter={() => setHoveredNodeId(node.id)}
+            onMouseLeave={() => setHoveredNodeId((prev) => (prev === node.id ? null : prev))}
+          >
+            <div className="flex items-start">
+              <div
+                className="mr-1 mt-1 cursor-pointer w-4 h-4 flex items-center justify-center"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (node.children.length > 0) {
+                    onToggleCollapse(node.id)
+                  }
+                }}
+              >
+                {node.children.length > 0 ? (
+                  hoveredNodeId === node.id ? (
+                    node.collapsed ? (
+                      <span>▶</span>
+                    ) : (
+                      <span>▼</span>
+                    )
+                  ) : (
+                    <span>•</span>
+                  )
+                ) : (
+                  <span>•</span>
+                )}
+              </div>
+              <div className="flex-1">
+                <textarea
+                  value={node.content}
+                  onChange={handleContentChange(node.id)}
+                  ref={(el) => (textareaRefs.current[node.id] = el)}
+                  onCompositionStart={handleCompositionStart(node.id)}
+                  onCompositionEnd={handleCompositionEnd(node.id)}
+                  onKeyDown={handleKeyDown(node.id, currentPath)}
+                  className="border-b border-gray-300 focus:outline-none focus:border-blue-500 w-full resize-none overflow-hidden"
+                  rows={1}
+                />
+                {!node.collapsed && node.children.length > 0 && (
+                  <TextualMindMap
+                    nodes={node.children}
+                    onUpdateContent={onUpdateContent}
+                    onAddSibling={onAddSibling}
+                    onIndent={onIndent}
+                    onOutdent={onOutdent}
+                    onToggleCollapse={onToggleCollapse}
+                    path={currentPath}
+                    focusNodeId={focusNodeId}
+                  />
+                )}
+              </div>
+            </div>
           </li>
         )
       })}
@@ -134,6 +193,7 @@ export default function MindMap() {
     id: '0',
     content: 'Root',
     children: [],
+    collapsed: false,
   })
   const [focusNodeId, setFocusNodeId] = useState<string | undefined>(undefined)
 
@@ -199,7 +259,6 @@ export default function MindMap() {
     [root]
   )
 
-  // Helper function to update node at a given path
   const updateNodeAtPath = (
     node: Node,
     path: number[],
@@ -346,6 +405,19 @@ export default function MindMap() {
     [setRoot]
   )
 
+  const handleToggleCollapse = useCallback(
+    (id: string) => {
+      const toggleCollapse = (node: Node): Node => {
+        if (node.id === id) {
+          return { ...node, collapsed: !node.collapsed }
+        }
+        return { ...node, children: node.children.map(toggleCollapse) }
+      }
+      setRoot(toggleCollapse(root))
+    },
+    [root]
+  )
+
   return (
     <div className="p-4">
       <h1 className="text-2xl font-bold mb-4">思维导图</h1>
@@ -358,6 +430,7 @@ export default function MindMap() {
               onAddChild={handleAddChild}
               onDeleteNode={handleDeleteNode}
               onUpdateContent={handleUpdateContent}
+              onToggleCollapse={handleToggleCollapse}
             />
           </div>
         </div>
@@ -369,6 +442,7 @@ export default function MindMap() {
             onAddSibling={handleAddSibling}
             onIndent={handleIndent}
             onOutdent={handleOutdent}
+            onToggleCollapse={handleToggleCollapse}
             focusNodeId={focusNodeId}
           />
         </div>
