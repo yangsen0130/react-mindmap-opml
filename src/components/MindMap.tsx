@@ -31,7 +31,7 @@ const MindMapNode: React.FC<{
           <div className="flex">
             <div className="w-8 border-r border-gray-300"></div>
             <div className="flex flex-col justify-center space-y-4">
-              {node.children.map((child, index) => (
+              {node.children.map((child) => (
                 <MindMapNode
                   key={child.id}
                   node={child}
@@ -58,17 +58,40 @@ const TextualMindMap: React.FC<{
   path?: number[]
   focusNodeId?: string
 }> = ({ nodes, onUpdateContent, onAddSibling, onIndent, onOutdent, path = [], focusNodeId }) => {
-  const inputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({})
+  const textareaRefs = useRef<{ [key: string]: HTMLTextAreaElement | null }>({})
+  const [isComposing, setIsComposing] = useState<{ [key: string]: boolean }>({})
 
   useEffect(() => {
-    if (focusNodeId && inputRefs.current[focusNodeId]) {
-      inputRefs.current[focusNodeId]?.focus()
+    if (focusNodeId && textareaRefs.current[focusNodeId]) {
+      textareaRefs.current[focusNodeId]?.focus()
     }
   }, [focusNodeId])
 
   const handleContentChange =
-    (id: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    (id: string) => (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       onUpdateContent(id, e.target.value)
+    }
+
+  const handleCompositionStart = (id: string) => () => {
+    setIsComposing((prev) => ({ ...prev, [id]: true }))
+  }
+
+  const handleCompositionEnd = (id: string) => () => {
+    setIsComposing((prev) => ({ ...prev, [id]: false }))
+  }
+
+  const handleKeyDown =
+    (id: string, currentPath: number[]) => (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Enter' && !isComposing[id] && !e.shiftKey) {
+        e.preventDefault()
+        onAddSibling(currentPath)
+      } else if (e.key === 'Tab' && !e.shiftKey) {
+        e.preventDefault()
+        onIndent(currentPath)
+      } else if (e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault()
+        onOutdent(currentPath)
+      }
     }
 
   return (
@@ -78,24 +101,15 @@ const TextualMindMap: React.FC<{
 
         return (
           <li key={node.id}>
-            <input
-              type="text"
+            <textarea
               value={node.content}
               onChange={handleContentChange(node.id)}
-              ref={(el) => (inputRefs.current[node.id] = el)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  onAddSibling(currentPath)
-                } else if (e.key === 'Tab' && !e.shiftKey) {
-                  e.preventDefault()
-                  onIndent(currentPath)
-                } else if (e.key === 'Tab' && e.shiftKey) {
-                  e.preventDefault()
-                  onOutdent(currentPath)
-                }
-              }}
-              className="border-b border-gray-300 focus:outline-none focus:border-blue-500 w-full"
+              ref={(el) => (textareaRefs.current[node.id] = el)}
+              onCompositionStart={handleCompositionStart(node.id)}
+              onCompositionEnd={handleCompositionEnd(node.id)}
+              onKeyDown={handleKeyDown(node.id, currentPath)}
+              className="border-b border-gray-300 focus:outline-none focus:border-blue-500 w-full resize-none overflow-hidden"
+              rows={1}
             />
             {node.children.length > 0 && (
               <TextualMindMap
@@ -250,10 +264,10 @@ export default function MindMap() {
         // Can't indent root node
         return
       }
-  
+
       const parentPath = path.slice(0, -1)
       const index = path[path.length - 1]
-  
+
       if (index === 0) {
         // No previous sibling to indent into
         return
@@ -316,7 +330,7 @@ export default function MindMap() {
             if (i === parentIndex) {
               return [newParentNode, targetNode]
             }
-            return child
+            return [child]
           })
 
           return { ...node, children: newChildren }
@@ -329,10 +343,10 @@ export default function MindMap() {
 
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Mind Map</h1>
+      <h1 className="text-2xl font-bold mb-4">思维导图</h1>
       <div className="flex">
         <div className="w-2/3 pr-4 overflow-auto">
-          <h2 className="text-xl font-semibold mb-2">Graphical View</h2>
+          <h2 className="text-xl font-semibold mb-2">图形视图</h2>
           <div className="border p-4 rounded-lg bg-gray-50">
             <MindMapNode
               node={root}
@@ -343,7 +357,7 @@ export default function MindMap() {
           </div>
         </div>
         <div className="w-1/3 pl-4 border-l">
-          <h2 className="text-xl font-semibold mb-2">Textual View (Editable)</h2>
+          <h2 className="text-xl font-semibold mb-2">文本视图（可编辑）</h2>
           <TextualMindMap
             nodes={root.children}
             onUpdateContent={handleUpdateContent}
