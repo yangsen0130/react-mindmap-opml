@@ -16,7 +16,7 @@ const MindMapNode: React.FC<{
   return (
     <div className="flex items-center">
       <div
-        className="border rounded p-2 mb-2 cursor-pointer bg-white"
+        className="border rounded p-2 mb-2 cursor-pointer bg-white min-w-[100px] max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap"
         onClick={() => onDeleteNode(node.id)}
         onContextMenu={(e) => {
           e.preventDefault()
