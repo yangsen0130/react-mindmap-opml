@@ -314,21 +314,26 @@ export default function MindMap() {
         const newRoot = updateNodeAtPath(prevRoot, grandparentPath, (node) => {
           const parentNode = node.children[parentIndex]
           const targetNode = parentNode.children[index]
+          const followingSiblings = parentNode.children.slice(index + 1)
 
-          // Remove targetNode from parent's children
-          const newParentChildren = parentNode.children.filter(
-            (_, i) => i !== index
-          )
+          // Remove targetNode and following siblings from parent's children
+          const newParentChildren = parentNode.children.slice(0, index)
 
           const newParentNode = {
             ...parentNode,
             children: newParentChildren,
           }
 
-          // Insert targetNode into grandparent's children after parentNode
+          // Set targetNode's children to include following siblings
+          const newTargetNode = {
+            ...targetNode,
+            children: [...targetNode.children, ...followingSiblings],
+          }
+
+          // Insert newTargetNode into grandparent's children after parentNode
           const newChildren = node.children.flatMap((child, i) => {
             if (i === parentIndex) {
-              return [newParentNode, targetNode]
+              return [newParentNode, newTargetNode]
             }
             return [child]
           })
