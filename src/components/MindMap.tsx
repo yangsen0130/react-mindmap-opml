@@ -52,29 +52,54 @@ const MindMapNode: React.FC<{
 const TextualMindMap: React.FC<{
   nodes: Node[]
   onUpdateContent: (id: string, content: string) => void
-}> = ({ nodes, onUpdateContent }) => {
-  const handleContentChange = (id: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    onUpdateContent(id, e.target.value)
-  }
+  onAddSibling: (path: number[]) => void
+  onIndent: (path: number[]) => void
+  onOutdent: (path: number[]) => void
+  path?: number[]
+}> = ({ nodes, onUpdateContent, onAddSibling, onIndent, onOutdent, path = [] }) => {
+  const handleContentChange =
+    (id: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+      onUpdateContent(id, e.target.value)
+    }
 
   return (
     <ul className="list-disc pl-4">
-      {nodes.map((node) => (
-        <li key={node.id}>
-          <input
-            type="text"
-            value={node.content}
-            onChange={handleContentChange(node.id)}
-            className="border-b border-gray-300 focus:outline-none focus:border-blue-500"
-          />
-          {node.children.length > 0 && (
-            <TextualMindMap
-              nodes={node.children}
-              onUpdateContent={onUpdateContent}
+      {nodes.map((node, index) => {
+        const currentPath = [...path, index]
+
+        return (
+          <li key={node.id}>
+            <input
+              type="text"
+              value={node.content}
+              onChange={handleContentChange(node.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  onAddSibling(currentPath)
+                } else if (e.key === 'Tab' && !e.shiftKey) {
+                  e.preventDefault()
+                  onIndent(currentPath)
+                } else if (e.key === 'Tab' && e.shiftKey) {
+                  e.preventDefault()
+                  onOutdent(currentPath)
+                }
+              }}
+              className="border-b border-gray-300 focus:outline-none focus:border-blue-500 w-full"
             />
-          )}
-        </li>
-      ))}
+            {node.children.length > 0 && (
+              <TextualMindMap
+                nodes={node.children}
+                onUpdateContent={onUpdateContent}
+                onAddSibling={onAddSibling}
+                onIndent={onIndent}
+                onOutdent={onOutdent}
+                path={currentPath}
+              />
+            )}
+          </li>
+        )
+      })}
     </ul>
   )
 }
@@ -86,58 +111,209 @@ export default function MindMap() {
     children: [],
   })
 
-  const handleAddChild = useCallback((parentId: string) => {
-    const newNode: Node = {
-      id: Math.random().toString(36).substr(2, 9),
-      content: 'New Node',
-      children: [],
+  const handleAddChild = useCallback(
+    (parentId: string) => {
+      const newNode: Node = {
+        id: Math.random().toString(36).substr(2, 9),
+        content: 'New Node',
+        children: [],
+      }
+
+      const addChildToNode = (node: Node): Node => {
+        if (node.id === parentId) {
+          return { ...node, children: [...node.children, newNode] }
+        }
+        return {
+          ...node,
+          children: node.children.map(addChildToNode),
+        }
+      }
+
+      setRoot(addChildToNode(root))
+    },
+    [root]
+  )
+
+  const handleDeleteNode = useCallback(
+    (id: string) => {
+      const deleteNodeFromTree = (node: Node): Node | null => {
+        if (node.id === id) {
+          return null
+        }
+        return {
+          ...node,
+          children: node.children
+            .map(deleteNodeFromTree)
+            .filter((child): child is Node => child !== null),
+        }
+      }
+
+      const newRoot = deleteNodeFromTree(root)
+      if (newRoot) {
+        setRoot(newRoot)
+      }
+    },
+    [root]
+  )
+
+  const handleUpdateContent = useCallback(
+    (id: string, content: string) => {
+      const updateNodeContent = (node: Node): Node => {
+        if (node.id === id) {
+          return { ...node, content }
+        }
+        return {
+          ...node,
+          children: node.children.map(updateNodeContent),
+        }
+      }
+
+      setRoot(updateNodeContent(root))
+    },
+    [root]
+  )
+
+  // Helper function to update node at a given path
+  const updateNodeAtPath = (
+    node: Node,
+    path: number[],
+    updater: (node: Node, index: number, path: number[]) => Node | null
+  ): Node | null => {
+    if (path.length === 0) {
+      return updater(node, 0, path)
     }
 
-    const addChildToNode = (node: Node): Node => {
-      if (node.id === parentId) {
-        return { ...node, children: [...node.children, newNode] }
-      }
+    const [index, ...rest] = path
+    if (index < 0 || index >= node.children.length) {
+      return node
+    }
+
+    const updatedChild = updateNodeAtPath(node.children[index], rest, updater)
+    if (updatedChild === null) {
+      // Remove the child
+      const newChildren = node.children.filter((_, i) => i !== index)
+      return { ...node, children: newChildren }
+    } else {
       return {
         ...node,
-        children: node.children.map(addChildToNode),
+        children: node.children.map((child, i) =>
+          i === index ? updatedChild : child
+        ),
       }
     }
+  }
 
-    setRoot(addChildToNode(root))
-  }, [root])
-
-  const handleDeleteNode = useCallback((id: string) => {
-    const deleteNodeFromTree = (node: Node): Node | null => {
-      if (node.id === id) {
-        return null
+  const handleAddSibling = useCallback(
+    (path: number[]) => {
+      const newNode: Node = {
+        id: Math.random().toString(36).substr(2, 9),
+        content: '',
+        children: [],
       }
-      return {
-        ...node,
-        children: node.children
-          .map(deleteNodeFromTree)
-          .filter((child): child is Node => child !== null),
-      }
-    }
 
-    const newRoot = deleteNodeFromTree(root)
-    if (newRoot) {
-      setRoot(newRoot)
-    }
-  }, [root])
+      const parentPath = path.slice(0, -1)
+      const index = path[path.length - 1]
 
-  const handleUpdateContent = useCallback((id: string, content: string) => {
-    const updateNodeContent = (node: Node): Node => {
-      if (node.id === id) {
-        return { ...node, content }
-      }
-      return {
-        ...node,
-        children: node.children.map(updateNodeContent),
-      }
-    }
+      setRoot((prevRoot) => {
+        const newRoot = updateNodeAtPath(prevRoot, parentPath, (node) => {
+          const newChildren = [
+            ...node.children.slice(0, index + 1),
+            newNode,
+            ...node.children.slice(index + 1),
+          ]
+          return { ...node, children: newChildren }
+        })
+        return newRoot || prevRoot
+      })
+    },
+    [setRoot]
+  )
 
-    setRoot(updateNodeContent(root))
-  }, [root])
+  const handleIndent = useCallback(
+    (path: number[]) => {
+        
+        path = [0, ...path];
+      if (path.length < 2) {
+        // Can't indent root node or nodes without siblings
+        console.log("dddd")
+        return
+      }
+
+      const parentPath = path.slice(0, -1)
+      const index = path[path.length - 1]
+    //   console.log("dddd")
+      if (index === 0) {
+        // No previous sibling to indent into
+        return
+      }
+
+      setRoot((prevRoot) => {
+        const newRoot = updateNodeAtPath(prevRoot, parentPath, (node) => {
+          const targetNode = node.children[index]
+          const previousSibling = node.children[index - 1]
+
+          // Remove targetNode from current children
+          const newChildren = node.children.filter((_, i) => i !== index)
+
+          // Add targetNode as child of previous sibling
+          const newPreviousSibling = {
+            ...previousSibling,
+            children: [...previousSibling.children, targetNode],
+          }
+
+          // Replace previous sibling and update children
+          newChildren[index - 1] = newPreviousSibling
+
+          return { ...node, children: newChildren }
+        })
+        return newRoot || prevRoot
+      })
+    },
+    [setRoot]
+  )
+
+  const handleOutdent = useCallback(
+    (path: number[]) => {
+      if (path.length < 2) {
+        // Can't outdent root node
+        return
+      }
+
+      const parentPath = path.slice(0, -1)
+      const grandparentPath = path.slice(0, -2)
+      const index = path[path.length - 1]
+      const parentIndex = path[path.length - 2]
+
+      setRoot((prevRoot) => {
+        const newRoot = updateNodeAtPath(prevRoot, grandparentPath, (node) => {
+          const parentNode = node.children[parentIndex]
+          const targetNode = parentNode.children[index]
+
+          // Remove targetNode from parent's children
+          const newParentChildren = parentNode.children.filter(
+            (_, i) => i !== index
+          )
+
+          const newParentNode = {
+            ...parentNode,
+            children: newParentChildren,
+          }
+
+          // Insert targetNode into grandparent's children after parentNode
+          const newChildren = node.children.flatMap((child, i) => {
+            if (i === parentIndex) {
+              return [newParentNode, targetNode]
+            }
+            return child
+          })
+
+          return { ...node, children: newChildren }
+        })
+        return newRoot || prevRoot
+      })
+    },
+    [setRoot]
+  )
 
   return (
     <div className="p-4">
@@ -159,6 +335,9 @@ export default function MindMap() {
           <TextualMindMap
             nodes={root.children}
             onUpdateContent={handleUpdateContent}
+            onAddSibling={handleAddSibling}
+            onIndent={handleIndent}
+            onOutdent={handleOutdent}
           />
         </div>
       </div>
