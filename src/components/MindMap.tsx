@@ -18,6 +18,7 @@ const MindMapNode: React.FC<{
   return (
     <div className="flex items-center">
       <div className="relative">
+        {/* Node Content */}
         <div
           className="border rounded p-2 mb-2 cursor-pointer bg-white min-w-[100px] max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap"
           onClick={() => onDeleteNode(node.id)}
@@ -28,6 +29,8 @@ const MindMapNode: React.FC<{
         >
           {node.content}
         </div>
+
+        {/* Toggle Collapse Button */}
         {node.children.length > 0 && (
           <button
             onClick={(e) => {
@@ -39,7 +42,15 @@ const MindMapNode: React.FC<{
             {node.collapsed ? '+' : '-'}
           </button>
         )}
+
+        {/* Small Square for Non-Root Nodes */}
+        {depth > 0 && (
+          <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1/2 w-3 h-3 bg-black"></div>
+        )}
+        
       </div>
+
+      {/* Children Nodes */}
       {!node.collapsed && node.children.length > 0 && (
         <div className={`flex flex-col ${depth % 2 === 0 ? 'items-start' : 'items-end'}`}>
           <div className="w-8 border-t border-gray-300"></div>
@@ -422,6 +433,7 @@ export default function MindMap() {
     <div className="p-4">
       <h1 className="text-2xl font-bold mb-4">思维导图</h1>
       <div className="flex">
+        {/* Graphical View */}
         <div className="w-2/3 pr-4 overflow-auto">
           <h2 className="text-xl font-semibold mb-2">图形视图</h2>
           <div className="border p-4 rounded-lg bg-gray-50">
@@ -434,6 +446,8 @@ export default function MindMap() {
             />
           </div>
         </div>
+
+        {/* Textual View */}
         <div className="w-1/3 pl-4 border-l">
           <h2 className="text-xl font-semibold mb-2">文本视图（可编辑）</h2>
           <TextualMindMap
