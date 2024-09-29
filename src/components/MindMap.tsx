@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
 
 interface Node {
   id: string
@@ -56,7 +56,16 @@ const TextualMindMap: React.FC<{
   onIndent: (path: number[]) => void
   onOutdent: (path: number[]) => void
   path?: number[]
-}> = ({ nodes, onUpdateContent, onAddSibling, onIndent, onOutdent, path = [] }) => {
+  focusNodeId?: string
+}> = ({ nodes, onUpdateContent, onAddSibling, onIndent, onOutdent, path = [], focusNodeId }) => {
+  const inputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({})
+
+  useEffect(() => {
+    if (focusNodeId && inputRefs.current[focusNodeId]) {
+      inputRefs.current[focusNodeId]?.focus()
+    }
+  }, [focusNodeId])
+
   const handleContentChange =
     (id: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
       onUpdateContent(id, e.target.value)
@@ -73,6 +82,7 @@ const TextualMindMap: React.FC<{
               type="text"
               value={node.content}
               onChange={handleContentChange(node.id)}
+              ref={(el) => (inputRefs.current[node.id] = el)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault()
@@ -95,6 +105,7 @@ const TextualMindMap: React.FC<{
                 onIndent={onIndent}
                 onOutdent={onOutdent}
                 path={currentPath}
+                focusNodeId={focusNodeId}
               />
             )}
           </li>
@@ -110,6 +121,7 @@ export default function MindMap() {
     content: 'Root',
     children: [],
   })
+  const [focusNodeId, setFocusNodeId] = useState<string | undefined>(undefined)
 
   const handleAddChild = useCallback(
     (parentId: string) => {
@@ -225,8 +237,11 @@ export default function MindMap() {
         })
         return newRoot || prevRoot
       })
+
+      // Set focus to the new node
+      setFocusNodeId(newNode.id)
     },
-    [setRoot]
+    [setRoot, setFocusNodeId]
   )
 
   const handleIndent = useCallback(
@@ -335,6 +350,7 @@ export default function MindMap() {
             onAddSibling={handleAddSibling}
             onIndent={handleIndent}
             onOutdent={handleOutdent}
+            focusNodeId={focusNodeId}
           />
         </div>
       </div>
